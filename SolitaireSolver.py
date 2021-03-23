@@ -14,63 +14,58 @@ sys.setrecursionlimit(1000)
 # Rewrite from recursion to increment
 
 # map?
-# [[0,0,0],1,[2,3,4],[[5],[6],[7],[8],[9],[10],[11],[12]))
+# [[0],[[1],[2],[3],[4],[5],[6],[7],[8],[9]]]
 # move
 # [from there, from_deep, to pos n, auto? = true\false]
 # pos
-# spec-button move? (0, 0, 0, False)
 #
-# possible cards: 3*(1..9) + 3*4 + 1
+# possible cards: 4*(6..10) + 4*4
 # how to store this?
-# like this: (rgb = 123) (red green black :D )
-# 1,1 2,1 3,1
-# 1,2 2,2 3,2
-# 1,3 2,3 3,3
-# ...
-# 1,9 2,9 3,9
-# 4,-1 5,-1 6,-1 (spec cards x4)
-# 7,-1 (special middle card)
-# 8,-1 (card back)
+# for numbers only red and black matters (red, black) = (1, 2)
+# (6 .. 10) = (6 .. 10)
+# for pictures (Jack, Queen, King, Ace) = -1
+#              (Hearts, Diamonds, Spades, Clubs) = (3, 4, 5, 6)
+# 1,6  2,6
+# 1,7  2,7
+# 1,8  2,8
+# 1,9  2,9
+# 1,10 2,10
+# 3,-1  4,-1  5,-1  6,-1
+# -1,-1 (card back)
 
 
 class screen_positions:
     def __init__(self):
-        self.spec_buttons = [(), (), ()]    # x, y, w, h
-        self.cells = [(), (), ()]           # x, y, w, h
-        self.middle = ()                    # x, y, w, h
-        self.topright = [(), (), ()]        # x, y, w, h
+        self.free_cell = ()                 # x, y, w, h
         self.main_field = ()                # x, y, w, h
         self.main = []                      # x1, x2, x3, x4, x5, x6, x7, x8
+        self.card = ()                      # w, h
 
 cards_pos = screen_positions()
-cards_pos.spec_buttons = [
-    (862, 131, 53, 54),
-    (862, 214, 53, 54),
-    (862, 297, 53, 54)
-]
-cards_pos.cells = [
-    (403, 125, 120, 232),
-    (555, 125, 120, 232),
-    (707, 125, 120, 232)
-]
-cards_pos.middle = (971, 125, 120, 232)
-cards_pos.topright = [
-    (1163, 125, 120, 232),
-    (1315, 125, 120, 233),
-    (1467, 125, 120, 232)
-]
-cards_pos.main_field = (403, 389, 1467+121, 283+356)
-cards_pos.main = [1467, 1315, 1163, 1011, 859, 707, 555, 403]
+cards_pos.free_cell = (1365, 214, 125, 187)
+cards_pos.main_field = (362, 457, 1434+125, 457+277)
+cards_pos.main = [1434, 1300, 1166, 1032, 898, 764, 630, 496, 362]
+cards_pos.card = (125, 187)
 cards_pos.main.sort()
 
+# (1434, 457, 125, 277)
+# (1300, 457, 125, 277)
+# (1166, 457, 125, 277)
+# (1032, 457, 125, 277)
+# (898, 457, 125, 277)
+# (764, 457, 125, 277)
+# (630, 457, 125, 277)
+# (496, 457, 125, 277)
+# (362, 457, 125, 277)
+
 data = {}
-move_weights = [50, 40, 10, 4, 1, 0]
-# auto_move = 50, special_move = 40, full_chain = 10,
+move_weights = [10, 4, 1, 0]
+# full_chain = 10,
 # full_chain_to_free = 4, to_free_cell = 1, break_chain = 1 ...
 
 
 class Move:
-    # map_pos ((0,1,2),3,(4,5,6),((7),(9),(9),(10),(11),(12),(13),(14)))
+    # map_pos (0,((1),(2),(3),(4),(5),(6),(7),(8),(9))
     def __init__(self, from_pos, deep, to, weight):
         self.from_pos = from_pos
         # deep calculated from bottom to top, so last card at 0 deep
@@ -108,20 +103,15 @@ def card_str(card):
 class Map_:
     # Solitiare map
     def __init__(self):
-        self.cells = [(), (), ()]
-        self.middle = False
-        self.topright = [(), (), ()]
-        self.main = [[], [], [], [], [], [], [], []]
+        self.free_cell = ()
+        self.main = [[], [], [], [], [], [], [], [], []]
 
     def __str__(self):  # map representation
-        t1 = " ".join(card_str(k) for k in self.cells)
-        t2 = "(7, -1)" if self.middle else "(     )"
-        t3 = " ".join(card_str(k) for k in self.topright)
-        top = t1 + "     " + t2 + "     " + t3
+        top = " "*60 + card_str(self.free_cell) + "\n"
         b_n = max([len(k) for k in self.main] + [1])
         b = [k + [()]*(b_n-len(k)) for k in self.main]
-        main = "\n".join(" ".join(card_str(k[i]) for k in b) for i in range(len(b[0])))
-        return top + "\n\n" + main
+        main = top + "\n".join(" ".join(card_str(k[i]) for k in b) for i in range(len(b[0])))
+        return main
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and (hash(self) == hash(other))
@@ -130,16 +120,13 @@ class Map_:
         return not self.__eq__(other)
 
     def __hash__(self):
-        return hash((tuple(sorted(self.cells)), self.middle, tuple(sorted(self.topright)), tuple(tuple(c) for c in sorted(self.main))))
+        return hash(tuple(tuple(c) for c in sorted(self.main)))
 
     def copy_map(self, map):
-        self.cells = list(map.cells)
-        self.middle = map.middle
-        self.topright = list(map.topright)
         self.main = [list(a) for a in map.main]
 
     def n(self):
-        return sum(k != () and k != (8, -1) for k in self.cells) + sum(sum(k != () for k in a) for a in self.main)
+        return (self.free_cell != ()) + sum(sum(k != () for k in a) for a in self.main)
 
     def read_map(self):
         # read screen and evaluate map from it
@@ -160,34 +147,37 @@ class Map_:
         printProgressBar('Reading screen:', 30, 1)
         print()
 
-        y_delta = 31
         x_delta = 0
-        y_diff = 8
-        x_diff = 8
-        x_size = 20
-        y_size = 23
+        y_delta = 30
+        x_diff = 6
+        y_diff = 5
+        x_size = 27
+        y_size = 22
 
         bar_max, bar_i = len(data), 0    # progress bar
-        for key, value in data.items():  # find all mathces with database
+        printProgressBar('Building map:', 30, bar_i/bar_max)
+        for key, template in data.items():  # find all mathces with database
             a = []
-            template = value
             w, h = template.shape[::-1]
+            template_color = cv2.mean(template)
+            #print(key, template_color)
             res = cv2.matchTemplate(img_gray, template, cv2.TM_CCOEFF_NORMED)
-            threshold = 0.99
+            if key[1] > 0:
+                threshold = 0.99
+            else:
+                threshold = 0.95
             loc = np.where(res >= threshold)
             for pt in zip(*loc[::-1]):
+                #print(pt)
+                color = cv2.mean(img_gray[pt[1]:pt[1] + h, pt[0]:pt[0]+w])
+                if not abs(color[0] - template_color[0]) < 5:  # Check color match
+                    continue
                 x, y = pt
-                for n, coord in enumerate(cards_pos.cells):  # check cells pos
-                    x_c, y_c, _, _ = coord
-                    if abs(x_c + x_diff - x) < 20 and abs(y_c + y_diff - y) < 20:
-                        self.cells[n] = key
-                if key == (7, -1) and abs(cards_pos.middle[0] - x) < 20 and abs(cards_pos.middle[1] - y) < 20:
-                    self.middle = True  # check middle
-                for n, coord in enumerate(cards_pos.topright):  # check topright pos
-                    x_c, y_c, _, _ = coord
-                    if abs(x_c + x_diff - x) < 20 and abs(y_c + y_diff - y) < 20:
-                        self.topright[n] = key
                 y_c = cards_pos.main_field[1]
+                # Add check for free cell pos
+                # TODO: fix it, can't read it
+                if abs(x - cards_pos.free_cell[0]) < 20 and abs(y - cards_pos.free_cell[1]) < 20:
+                    self.free_cell = key
                 if y >= y_c - 20:
                     for n, x_c in enumerate(cards_pos.main):  # check main field
                         if abs(x_c + x_diff - x) < 20:
@@ -196,173 +186,95 @@ class Map_:
                                 self.main[n] += [()]*(i - len(self.main[n]) + 1)
                             self.main[n][i] = key
                 a.append(pt)
-                # cv2.rectangle(img_rgb, pt, (pt[0] + w, pt[1] + h), (0,0,255), 2)
+                cv2.rectangle(img_gray, pt, (pt[0] + w, pt[1] + h), (0,0,255), 2)
+                #cv2.imshow('image', img_gray)
+                #cv2.waitKey(0)
             data_map[key] = a  # create coordinates matches database
+            #print(self)
             bar_i += 1
             printProgressBar('Building map:', 30, bar_i/bar_max)
         print()
+        #cv2.imshow('image', img_gray)
+        #cv2.waitKey(0)
         # func end
 
     def possible_moves(self):
         # list of all possible moves from given map
         move_list = []
 
-        if () in self.cells:  # any top-left cell is empty
-            j = self.cells.index(())  # index of free cell
-            move_list += [Move(i+7, 0, j, 1) for i, k in enumerate(self.main) if k != []]
-            # do not check moves from topright to freecells, becouse it's stupid move !!!
+        if self.free_cell == (): # free_cell is empty
+            move_list += [Move(i+1, 0, 0, 1) for i, k in enumerate(self.main) if k != []]
 
-        for i, x in enumerate(self.cells):  # any top-left cells is ocupy, check if we can drop it down to main field
-            if x != () and x != (8, -1):  # valid card on that spot
-                # check topright cells
-                # ... "or to topright" move that part to automove
-                # move_list += [Move(i, 0, j+4, False) for j,y in enumerate(self.topright) if y and check_valid_junction(x, y)]
-                # check main field
-                move_list += [Move(i, 0, j+7, 1 if y == [] else 10) for j, y in enumerate(self.main) if y == [] or check_valid_junction(x, y[-1])]
-
-        # comment this section to check this kind of moves is needed at all
-        """
-        if any(self.topright): #check if we can move from topright to mainfield (sometimes it usefull, yes?)
-            for i,x in enumerate(self.topright):
-                if x:
-                    move_list += [Move(i+4, 0, j+7, False) for j,y in enumerate(self.main) if (y and check_valid_junction(x, y[-1])) or not y]
-        """
-        # ...
-        for i, x in enumerate(self.main):  # check main field column by column
-            if x != []:  # x = column
-                n = find_max_valid_chain_len(x)
-                for d, c in enumerate(x):  # c = card, d = card num in column
-                    if len(x)-d == n:  # max chain
+        for i, column in enumerate(self.main):  # check main field column by column
+            if column != []:
+                max_valid_chain_len = find_max_valid_chain_len(column)
+                for d, card in enumerate(column):  # c = card, d = card num in column
+                    if len(column) - d == max_valid_chain_len:  # max chain
                         w = 10
                     else:
                         w = 1
                     # if d + 1 == len(x): # only last card
-                    #    move_list += [Move(i+7, 0, j+7, w) for j,y in enumerate(self.main) if j!=i and (y == [] or check_valid_junction(x[d], y[-1]))]
+                    #    move_list += [Move(i+1, 0, j+1, w) for j,y in enumerate(self.main) if j!=i and (y == [] or check_valid_junction(x[d], y[-1]))]
                     # elif  chek_valid_chain(x[d:]): # valid chain of cards
-                    if d >= len(x)-n:
-                        for j, y in enumerate(self.main):
-                            if j != i and (y == [] or check_valid_junction(x[d], y[-1])):
-                                if y == []:
+                    if d >= len(column) - max_valid_chain_len:
+                        for j, to_column in enumerate(self.main):
+                            if j != i and (to_column == [] or check_valid_junction(column[d], to_column[-1])):
+                                if to_column == []:
                                     w = w % 6
-                                move_list.append(Move(i+7, len(x)-d-1, j+7, w))
-
-        # check for special buttons move (if all 4 of same type special card available and we have a free cell)
-        # special cards is  (4,-1) (5,-1) (6,-1) (spec cards x4)
-        for sp in [(4, -1), (5, -1), (6, -1)]:
-            if self.cells.count(sp) + [x[-1] for x in self.main if x != []].count(sp) == 4:  # all 4 of 1 type available to move
-                if sp in self.cells or () in self.cells:
-                    move_list.append(Move(15, sp[0], 15, 40))
-
+                                move_list.append(Move(i+1, len(column)-d-1, j+1, w))
         return move_list
 
-    # map_pos ((0,1,2),3,(4,5,6),((7),(9),(9),(10),(11),(12),(13),(14)))
-    def auto_move(self):
-        # check for automatic move, that game do for me
-        # return auto move or Null if nothing to do
-
-        for i, k in enumerate(self.main):
-            if (7, -1) in k:
-                if k[-1] == (7, -1):
-                    return Move(i+7, 0, 3, 50)
-
-        min_n = min([a[1] if a != () else 0 for a in self.topright])
-
-        for i, k in enumerate(self.cells):
-            for x in [1, 2, 3]:
-                if k == (x, min_n+1):
-                    if min_n == 0:
-                        j = self.topright.index(())
-                    else:
-                        j = self.topright.index((x, min_n))
-                    return Move(i, 0, j+4, 50)
-
-        for i, k in enumerate(self.main):  # because of this automove can stuck it all in loop
-            if k != []:  # if not empty column in self.main
-                for x in [1, 2, 3]:
-                    if k[-1] == (x, min_n+1):
-                        if min_n == 0:
-                            j = self.topright.index(())
-                        else:
-                            j = self.topright.index((x, min_n))
-                        return Move(i+7, 0, j+4, 50)
-        return False
+    # map_pos (0,((1),(2),(3),(4),(5),(6),(7),(8),(9)))
 
     def move_execute(self, m):
         # execute move on current map
         # new_map = Map_()
         # new_map.copy(self)
-        # map_pos ((0,1,2),3,(4,5,6),((7),(9),(9),(10),(11),(12),(13),(14)))
-        if m.from_pos < 3:
-            a = self.cells[m.from_pos]
-            self.cells[m.from_pos] = ()
-        elif m.from_pos < 4:
-            pass
-        elif m.from_pos < 7:
-            a = self.topright[m.from_pos-4]
-            if a[1] > 1:
-                self.topright[m.from_pos-4][1] = a[1] - 1
-            else:  # don't know is it possible to remove card N 1
-                self.topright[m.from_pos-4] = ()
-        elif m.from_pos < 15:
-            a = self.main[m.from_pos-7][-1-m.deep:]
-            self.main[m.from_pos-7] = self.main[m.from_pos-7][:-1-m.deep]
-        else:  # special button moves
-            a = (m.deep, -1)
-            for k in self.main:
-                if a in k:
-                    k.pop()
-            for i, k in enumerate(self.cells):
-                if a == k:
-                    self.cells[i] = ()
-            self.cells[self.cells.index(())] = (8, -1)
+        # map_pos (0,((1),(2),(3),(4),(5),(6),(7),(8),(9)))
+        if m.from_pos == 0:
+            a = self.free_cell
+            self.free_cell = ()
+        else:
+            a = self.main[m.from_pos-1][-1-m.deep:]
+            self.main[m.from_pos-1] = self.main[m.from_pos-1][:-1-m.deep]
 
-        if m.to < 3:
+        if m.to == 0:
             if type(a) == list:
                 a = a[0]
-            self.cells[m.to] = a
-        elif m.to < 4:
-            self.middle = True
-        elif m.to < 7:
-            if type(a) == list:
-                if a == []:
-                    raise WtfError
-                a = a[0]
-            self.topright[m.to-4] = a
-        elif m.to < 15:
+            self.free_cell = a
+        else:
             if type(a) is list:
-                self.main[m.to-7] += a
+                self.main[m.to-1] += a
             else:
-                self.main[m.to-7].append(a)
+                self.main[m.to-1].append(a)
         # return(new_map)
         # func end
 
 win_map = Map_()
-win_map.cells = [(8, -1), (8, -1), (8, -1)]
-win_map.middle = True
-win_map.topright = [(1, 9), (2, 9), (3, 9)]
-win_map.main = [[], [], [], [], [], [], [], []]
+win_map.free_cell = ()
+win_map.main = [
+    [(1, 10), (2, 9), (1, 8), (2, 7), (1, 6)],
+    [(1, 10), (2, 9), (1, 8), (2, 7), (1, 6)],
+    [(2, 10), (1, 9), (2, 8), (1, 7), (2, 6)],
+    [(2, 10), (1, 9), (2, 8), (1, 7), (2, 6)],
+    [(3, -1), (3, -1), (3, -1), (3, -1)],
+    [(4, -1), (4, -1), (4, -1), (4, -1)],
+    [(5, -1), (5, -1), (5, -1), (5, -1)],
+    [(6, -1), (6, -1), (6, -1), (6, -1)],
+    []
+]
 
 test_map = Map_()
 test_map.main = [
-    [(2, 8), (3, 6), (5, -1), (7, -1), (3, 8)],
-    [(4, -1), (3, 3), (5, -1), (2, 7), (2, 2)],
-    [(3, 4), (1, 3), (2, 4), (2, 9), (4, -1)],
-    [(6, -1), (3, 1), (6, -1), (1, 6), (2, 6)],
-    [(5, -1), (2, 3), (3, 9), (6, -1), (3, 5)],
-    [(1, 9), (3, 7), (4, -1), (2, 5), (3, 2)],
-    [(1, 5), (1, 2), (5, -1), (1, 4), (6, -1)],
-    [(2, 1), (1, 8), (1, 1), (4, -1), (1, 7)],
-]
-test_map2 = Map_()
-test_map2.main = [
-    [(2, 8), (3, 6), (5, -1), (7, -1), (3, 8)],
-    [(4, -1), (3, 3), (5, -1), (2, 7), (2, 2)],
-    [(3, 4), (1, 3), (2, 4), (2, 9), (4, -1)],
-    [(6, -1), (3, 1), (6, -1), (1, 6), (2, 6)],
-    [(5, -1), (2, 3), (3, 9), (6, -1), (3, 5)],
-    [(1, 9), (3, 7), (4, -1), (2, 5), (3, 2)],
-    [(1, 5), (1, 2), (5, -1), (1, 4), (6, -1)],
-    [(2, 1), (1, 8), (1, 1), (4, -1), (1, 7)],
+    [(6, -1), (5, -1), (4, -1), (2, 7)],
+    [(1, 6), (4, -1), (3, -1), (5, -1)],
+    [(2, 8), (1, 7), (5, -1), (2, 9)],
+    [(2, 10), (2, 9), (6, -1), (4, -1)],
+    [(1, 10), (4, -1), (2, 6), (3, -1)],
+    [(1, 7), (6, -1), (3, -1), (1, 8)],
+    [(5, -1), (2, 8), (3, -1), (6, -1)],
+    [(2, 10), (1, 9), (2, 7), (1, 8)],
+    [(2, 6), (1, 6), (1, 9), (1, 10)]
 ]
 
 
@@ -384,6 +296,8 @@ def find_max_valid_chain_len(chain):
 def check_valid_junction(card, card_to):
     if card[0] != card_to[0] and card[1] + 1 == card_to[1]:
         return True
+    if card[0] == card_to[0] and card[1] == -1:
+        return True
     return False
 
 
@@ -392,11 +306,10 @@ def find_solution_path():
     # each iteration check all possible moves and check if it lead us to victory
     # if dead end - drop that branch
     # if stuck in returning to prev position - drop
-    # check for auto-move befor each move
     global solution_found
     global map_dict      # dict={map: path_to_that_map, ...}
-    global map_stack     # dict={move_weight: [maps...], } stuck what map to check on possible moves next
-    global map_checked   # set of maps that already checked (not check it again)
+    global map_stack     # dict={move_weight: [maps...], } stack what map to check for possible moves next
+    global map_checked   # set of maps that already checked (don't check it again)
     global move_weights  # list of possible move weights
     global win_map
     global step
@@ -422,11 +335,9 @@ def find_solution_path():
             # else:
             #    map_checked.add(next_map)
             prev_path = map_dict[next_map]
-            a = next_map.auto_move()
-            if a:
-                moves_to_test = [a]
-            else:
-                moves_to_test = next_map.possible_moves()
+            moves_to_test = next_map.possible_moves()
+            #print(moves_to_test)
+            #exit()
             # moves_to_test.sort(reverse = True)
             for test_move in moves_to_test:
                 new_map = Map_()
@@ -439,8 +350,8 @@ def find_solution_path():
                 else:
                     if len(map_dict[new_map]) > len(prev_path) + 1:
                         map_dict[new_map] = prev_path + [test_move]
-                if new_map.n() < min_n:
-                    min_n = new_map.n()
+                #if new_map.n() < min_n:
+                #    min_n = new_map.n()
                 if new_map == win_map:
                     solution_found = True
                     break
@@ -476,7 +387,8 @@ def solution_optimization():
 
 def solve_it(sc_map, path):
     # map_pos ((0,1,2),3,(4,5,6),((7),(9),(9),(10),(11),(12),(13),(14)))
-    _, _, card_w, card_h = cards_pos.cells[0]
+    # map_pos (0,((1),(2),(3),(4),(5),(6),(7),(8),(9))
+    _, _, card_w, card_h = cards_pos.free_cell
     card_w = card_w // 2
     card_h = card_h // 2
     y_delta = 31
@@ -484,59 +396,40 @@ def solve_it(sc_map, path):
     time.sleep(0.5)
     for m in path:
         print(m)
-        if m.weight != 50:
-            x, y = 0, 0
-            if m.from_pos < 3:
-                x, y, _, _ = cards_pos.cells[m.from_pos]
-                x += card_w
-                y += card_h
-            elif m.from_pos < 7:
-                # a = self.topright[m.from_pos-4]
-                # if a[1] > 1:
-                #    self.topright[m.from_pos-4][1] = a[1] - 1
-                # else: #don't know is it possible to remove card N 1
-                #    self.topright[m.from_pos-4] = ()
-                print("nothing here")
-            elif m.from_pos < 15:
-                x = cards_pos.main[m.from_pos-7] + card_w
-                y = cards_pos.main_field[1] + 10 + y_delta*(len(sc_map.main[m.from_pos-7])-1-m.deep)
-            else:  # special button moves
-                x, y, w, h = cards_pos.spec_buttons[m.deep-4]
-                x += w // 2
-                y += h // 2
-            x2, y2 = 0, 0
-            if m.to < 3:
-                x2, y2, _, _ = cards_pos.cells[m.to]
-                x2 += card_w
-                y2 += card_h
-            elif m.to < 4:
-                pass
-            elif m.to < 7:
-                x2, y2, _, _ = cards_pos.topright[m.to-4]
-                x2 += card_w
-                y2 += card_h
-            elif m.to < 15:
-                x2 = cards_pos.main[m.to-7] + card_w
-                i = len(sc_map.main[m.to-7])
-                i = i if i != 0 else 1
-                y2 = cards_pos.main_field[1] + 10 + y_delta*(i-1)
-            # time.sleep(0.3)
-            # screenshot =  ImageGrab.grab()
-            # draw = ImageDraw.Draw(screenshot)
-            # draw.line((x,y, x2,y2), fill=128)
-            # img_rgb = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGR2RGB)
-            # cv2.imshow('image',img_rgb)
-            # cv2.moveWindow('image', 1366, -350)
-            # cv2.waitKey(0)
-            # cv2.destroyAllWindows()
-            # click(100, 100)
-            time.sleep(0.3)
-            if x2 != 0:
-                move_click(x, y, x2, y2)
-            else:
-                click(x, y)
+        x, y = 0, 0
+        if m.from_pos == 0:
+            x, y, _, _ = cards_pos.free_cell
+            x += card_w
+            y += card_h
         else:
-            time.sleep(0.4)
+            x = cards_pos.main[m.from_pos-1] + card_w
+            y = cards_pos.main_field[1] + 10 + y_delta*(len(sc_map.main[m.from_pos-1])-1-m.deep)
+
+        x2, y2 = 0, 0
+        if m.to == 0:
+            x2, y2, _, _ = cards_pos.free_cell
+            x2 += card_w
+            y2 += card_h
+        else:
+            x2 = cards_pos.main[m.to-1] + card_w
+            i = len(sc_map.main[m.to-1])
+            i = i if i != 0 else 1
+            y2 = cards_pos.main_field[1] + 10 + y_delta*(i-1)
+        # time.sleep(0.3)
+        # screenshot =  ImageGrab.grab()
+        # draw = ImageDraw.Draw(screenshot)
+        # draw.line((x,y, x2,y2), fill=128)
+        # img_rgb = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGR2RGB)
+        # cv2.imshow('image',img_rgb)
+        # cv2.moveWindow('image', 1366, -350)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+        # click(100, 100)
+        time.sleep(0.3)
+        if x2 != 0:
+            move_click(x, y, x2, y2)
+        else:
+            click(x, y)
         sc_map.move_execute(m)
         # break
     # solve it by move mouse and so
@@ -546,14 +439,16 @@ def find_contours():
     screenshot = ImageGrab.grab()  # Make screenshot
     im = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGR2RGB)
     gray = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGR2GRAY)
-    ret, thresh = cv2.threshold(gray, 127, 255, 0)
+    ret, thresh = cv2.threshold(gray, 200, 255, 0)
     contours, _ = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    # cv2.imshow("Show", thresh)
+    # cv2.waitKey(0)
     # areas = [cv2.contourArea(c) for c in contours]
     # max_index = np.argmax(areas)
     # cnt=contours[max_index]
     for cnt in contours:
         x, y, w, h = cv2.boundingRect(cnt)
-        if w > 100 and w < 200 and h > 200:
+        if w > 100 and w < 200 and h > 180:
             # print("x = %4s   y = %4s   h = %4s   w = %4s"%(x, y, w, h))
             print((x, y, w, h))
             cv2.rectangle(im, (x, y), (x+w, y+h), (0, 255, 0), 2)
@@ -563,23 +458,23 @@ def find_contours():
 
 def make_database():
     _, y, _, _ = cards_pos.main_field
-    _, _, w, h = cards_pos.middle
+    w, h = cards_pos.card
     screenshot = ImageGrab.grab()  # Make screenshot
     img_rgb = cv2.cvtColor(np.array(screenshot), cv2.COLOR_BGR2RGB)
     fig = plt.figure()
-    y_delta = 31
     x_delta = 0
-    y_diff = 8
-    x_diff = 8
-    x_size = 20
-    y_size = 23
+    y_delta = 30
+    x_diff = 6
+    y_diff = 5
+    x_size = 27
+    y_size = 22
     n = 0
     for j, x in enumerate(cards_pos.main):
-        for i in range(5):
+        for i in range(4):
             # cv2.imshow('image',img_rgb[y+y_diff:y+y_diff+y_size, x+x_diff:x+x_diff+x_size])
             # cv2.waitKey(0)
             # cv2.destroyAllWindows()
-            ax = fig.add_subplot(10, 8, i*8 + 1 + j)
+            ax = fig.add_subplot(4, 9, i*9 + 1 + j)
             img_fragment = img_rgb[y+y_diff+y_delta*i:y+y_diff+y_delta*i+y_size, x+x_diff+x_delta*i:x+x_diff+x_delta*i+x_size]
             ax.imshow(img_fragment, 'gray')
             cv2.imwrite(str(n) + ".png", img_fragment)
@@ -624,7 +519,9 @@ MAX_STEPS = 100000
 if __name__ == "__main__":
 
     print("Program start.")
-
+    #find_contours()
+    #make_database()
+    #exit()
     read_database()
     while AUTO_SOLVE is True:
         step = 0
@@ -636,23 +533,24 @@ if __name__ == "__main__":
         gc.collect()
         screen_map = Map_()
         screen_map.read_map()
-        # screen_map = test_map2
+        #print(screen_map.main)
+        #screen_map = test_map
         for w in move_weights:
             map_stack[w] = []
         map_stack[0].append(None)
-        map_stack[50].append(screen_map)
+        map_stack[10].append(screen_map)
         map_dict[screen_map] = []
 
         print("\nCurrent Map:\n")
         print(screen_map)
         print("\n")
-
+        #exit()
         # click(50, 50)
         find_better_solution = True
         find_solution_path()
         if solution_found:
             while find_better_solution:
-                all_moves, auto_moves = len(map_dict[win_map]), len([1 for m in map_dict[win_map] if m.weight == 50])
+                all_moves, auto_moves = len(map_dict[win_map]), len([1 for m in map_dict[win_map] if m.weight == 10])
                 print("\nSolution found: %s moves (%s manual, %s auto)" % (all_moves, all_moves - auto_moves, auto_moves))
                 if not AUTO_SOLVE:
                     print("Find better solution? (y/n): ", end='')
@@ -680,7 +578,7 @@ if __name__ == "__main__":
                 time.sleep(3)
         else:
             print("Reach dead end, no solution detected.")
-        click(1467, 940)
+        click(1467, 900)
         time.sleep(6)
 
     print("Program end.")
